@@ -1,0 +1,29 @@
+{
+  "elements":
+  [
+
+    { "type": "Label", "label": "##### BundesligaTabelle v1.1 (13.03.2016 10.30Uhr) #####" },
+    { "type": "Label", "label": "Fussball-Liga auswählen:"},
+    { "name": "LigaSelection", "type": "Select", "caption": "Auswahl der Liga",
+       "options": [
+                    { "label": "1. Bundesliga", "value": "Liga1" },
+                    { "label": "2. Bundesliga", "value": "Liga2" },
+                    { "label": "3. Liga", "value": "Liga3" }
+       ]},
+    { "type": "Label", "label": "----------------------------------------------------------------------------------------------------------------------------" },
+    { "type": "Label", "label": "Intervall in welchem die Tabelle aktualisiert wird:" },
+    { "type": "IntervalBox", "name": "Intervall", "caption": "Sekunden" },
+    { "type": "Label", "label": "----------------------------------------------------------------------------------------------------------------------------" },
+    { "name": "FarbenAktiv", "type": "CheckBox", "caption": "Farbige Darstellung" },
+    { "type": "Label", "label": "Farbcode der Schriftfarbe muss im HEX-Format eingegeben werden:" },
+    { "name": "TextFarbcode", "type": "ValidationTextBox", "caption": "Schriftfarbe" },
+    { "name": "TextSize", "type": "ValidationTextBox", "caption": "Schriftgröße" }
+
+  ],
+  "actions":
+  [
+
+    { "type": "Button", "label": "Update", "onClick": "BLT_Update($id);" }
+
+  ]
+}
