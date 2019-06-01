@@ -13,6 +13,8 @@
 
 
 ## 1. Funktionsumfang
+Modul entwickelt von Bayaro wird aber nicht mehr aktualisiert!
+
 Dieses Modul liest zyklisch die aktuelle Fussball-Tabelle bei "www.dfb.de"
 aus und speichert diese in einer String-Variable (HTMLBox) ab. Die Instanz kann
 mehrmals angelegt werden, wenn ihr z.B. alle 3 Ligen einbinden möchtet.
@@ -32,7 +34,7 @@ Einstellungsmöglichkeiten in der Instanz:
 ## 3. Installation
 Über die Kern-Instanz "Module Control" folgende URL hinzufügen:
 
-`git://github.com/BayaroX/BY_BundesligaTabelle.git`
+`https://github.com/AndreasWalder/IPSBundesligaTabelle`
 
 Die neue Instanz findet ihr dort, wo ihr sie angelegt habt.
 Danach muss nur noch die Variable "Tabelle" (unterhalb der Instanz) in euer WebFront verlinkt werden.
@@ -47,8 +49,4 @@ Aktualisiert die Fussball-Tabelle in der Variable.
 
 ## 5. Changelog
 Version 1.0:
-  - Erster Release
-
-Version 1.1:
-  - NEU # Schriftfarbe einstellbar in der Instanz
-  - NEU # Schriftgröße einstellbar in der Instanz
+  - Erster Release ohne Fehler

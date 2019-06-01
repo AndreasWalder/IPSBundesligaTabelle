@@ -90,7 +90,7 @@ class BundesligaTabelle extends IPSModule
 				}
 			
 				// Verein-Logo URL
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[2]/img/@src');
+				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[2]/a/img/@src');
 				foreach ($content as $entry01) {
 					$BundesligaTabelleAR["VereinLogo"][] = $entry01->nodeValue;
 				}
