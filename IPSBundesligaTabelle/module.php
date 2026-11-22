@@ -98,14 +98,15 @@ class BundesligaTabelle extends IPSModule
 				// Verein-Name
 			   $content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[3]');
 			   foreach ($content as $entry01) {
-					$BundesligaTabelleAR["VereinName"][] = strtr(utf8_decode($entry01->nodeValue), $Sonderzeichen);
+					//$BundesligaTabelleAR["VereinName"][] = strtr(utf8_decode($entry01->nodeValue), $Sonderzeichen);
+					$BundesligaTabelleAR["VereinName"][] = strtr(mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1'), $Sonderzeichen);
 				}
 			
 				// Anzahl Spiele
 				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[4]');
 				$i = 0;
 				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Spiele"][] = utf8_decode($entry01->nodeValue);
+					$BundesligaTabelleAR["Spiele"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
 					$i++;
 				}
 			
@@ -113,7 +114,7 @@ class BundesligaTabelle extends IPSModule
 				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[5]');
 				$i = 0;
 				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Siege"][] = utf8_decode($entry01->nodeValue);
+					$BundesligaTabelleAR["Siege"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
 					$i++;
 				}
 			
@@ -121,7 +122,7 @@ class BundesligaTabelle extends IPSModule
 				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[6]');
 				$i = 0;
 				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Unentschieden"][] = utf8_decode($entry01->nodeValue);
+					$BundesligaTabelleAR["Unentschieden"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
 					$i++;
 				}
 			
@@ -129,7 +130,7 @@ class BundesligaTabelle extends IPSModule
 				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[7]');
 				$i = 0;
 				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Niederlagen"][] = utf8_decode($entry01->nodeValue);
+					$BundesligaTabelleAR["Niederlagen"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
 					$i++;
 				}
 			
@@ -137,7 +138,7 @@ class BundesligaTabelle extends IPSModule
 				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[8]');
 				$i = 0;
 				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Torverhaeltnis"][] = utf8_decode($entry01->nodeValue);
+					$BundesligaTabelleAR["Torverhaeltnis"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
 					$i++;
 				}
 			
@@ -145,7 +146,7 @@ class BundesligaTabelle extends IPSModule
 				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[9]');
 				$i = 0;
 				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["TorDifferenz"][] = utf8_decode($entry01->nodeValue);
+					$BundesligaTabelleAR["TorDifferenz"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
 					$i++;
 				}
 			
@@ -153,7 +154,7 @@ class BundesligaTabelle extends IPSModule
 				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[10]');
 				$i = 0;
 				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Punkte"][] = utf8_decode($entry01->nodeValue);
+					$BundesligaTabelleAR["Punkte"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
 					$i++;
 				}
         
@@ -276,7 +277,8 @@ class BundesligaTabelle extends IPSModule
     		$id = $this->GetIDforIdent($Ident);
     		if (GetValueString($id) <> $Value)
     		{
-    				SetValueString($id, $Value);
+    				//SetValueString($id, $Value);
+					SetValueString($id, iconv(mb_detect_encoding($Value, mb_detect_order(), true), "UTF-8", $Value));
     				return true;
     		}
     		return false;
