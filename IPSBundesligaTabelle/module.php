@@ -1,363 +1,167 @@
-<?
+<?php
 class BundesligaTabelle extends IPSModule
 {
+    private const API_BASE = 'https://api.openligadb.de';
+    private const BAYERN_RSS = 'https://fcbayern.com/de/api/rss/contentliste/news';
 
     public function Create()
     {
-        //Never delete this line!
         parent::Create();
-        
-        //These lines are parsed on Symcon Startup or Instance creation
-        //You cannot use variables here. Just static values.
-        $this->RegisterPropertyString("LigaSelection", "Liga1");
-        $this->RegisterPropertyString("TextFarbcode", "FFFFFF");
-        $this->RegisterPropertyString("TextSize", "12");
-        $this->RegisterPropertyBoolean("FarbenAktiv", true);
-        $this->RegisterPropertyInteger("Intervall", 1800);
-        $this->RegisterTimer("UpdateTabelle", 0, 'BLT_Update($_IPS[\'TARGET\']);');
-    }
-
-    public function Destroy()
-    {
-        $this->UnregisterTimer("UpdateTabelle");
-        
-        //Never delete this line!!
-        parent::Destroy();
+        $this->RegisterPropertyString('LigaSelection', 'Liga1');
+        $this->RegisterPropertyString('TextFarbcode', 'FFFFFF');
+        $this->RegisterPropertyString('TextSize', '12');
+        $this->RegisterPropertyBoolean('FarbenAktiv', true);
+        $this->RegisterPropertyInteger('Intervall', 1800);
+        $this->RegisterTimer('UpdateTabelle', 0, 'BLT_Update($_IPS[\'TARGET\']);');
     }
 
     public function ApplyChanges()
     {
-        //Never delete this line!
         parent::ApplyChanges();
-        
-        //Variable erstellen
-        $HTMLBox_VarID = $this->RegisterVariableString("HTMLBoxTabelle", "Tabelle", "~HTMLBox");
-        IPS_SetIcon($HTMLBox_VarID, "Database");
-        
+        $html = $this->RegisterVariableString('HTMLBoxTabelle', 'Bundesliga – Tabelle und Infos', '~HTMLBox');
+        IPS_SetIcon($html, 'Soccer');
+        $this->RegisterVariableString('StandingsJson', 'Tabellendaten (JSON)');
+        $this->RegisterVariableString('BayernNewsJson', 'FC Bayern News (JSON)');
+        $this->RegisterVariableString('LastUpdate', 'Letzte Aktualisierung');
+        $this->RegisterVariableString('LastError', 'Datenstatus');
+        foreach (['StandingsJson', 'BayernNewsJson', 'LastUpdate', 'LastError'] as $ident) {
+            $id = @IPS_GetObjectIDByIdent($ident, $this->InstanceID);
+            if ($id !== false) IPS_SetHidden($id, true);
+        }
+        $this->SetTimerInterval('UpdateTabelle', max(300, $this->ReadPropertyInteger('Intervall')));
         $this->Update();
-        $this->SetTimerInterval("UpdateTabelle", $this->ReadPropertyInteger("Intervall"));
     }
 
     public function Update()
     {
-        $LigaAuswahl = $this->ReadPropertyString("LigaSelection");
-				$Sonderzeichen = array("Ã¶" => "ö", "Ã¼" => "ü", "ÃŸ" => "ß", "Ã¤" => "ä", "Ã„" => "Ä", "Ãœ" => "Ü", "Ã–" => "Ö", "Ã©" => "Ë", "Ã©" => "é");
-				
-				switch ($LigaAuswahl) {
-				   case "Liga1":
-				     	$BLtabSportde_URL = "http://www.dfb.de/bundesliga/spieltagtabelle";
-				   break;
-			
-				   case "Liga2":
-				     	$BLtabSportde_URL = "http://www.dfb.de/2-bundesliga/spieltagtabelle";
-				   break;
-			
-				   case "Liga3":
-				     	$BLtabSportde_URL = "http://www.dfb.de/3-liga/spieltagtabelle";
-				   break;
-				}
-
-				
-				$page = @file_get_contents($BLtabSportde_URL);
-				if (($page === false) OR ($page == "") OR (strlen($page) < 100))
-				{
-						throw new Exception("Es konnten keine Daten von der Webseite geladen werden!", E_USER_WARNING);
-			  }
-			  
-				$DOM = new DOMDocument;
-			
-				libxml_use_internal_errors(true);
-			
-				if (!@$DOM->loadHTML($page))
-				    {
-				        $errors="";
-				        foreach (libxml_get_errors() as $error)  {
-				            $errors.=$error->message."<br/>";
-				        }
-				        libxml_clear_errors();
-				        print "libxml errors:<br>$errors";
-				        return;
-				    }
-				$xpath = new DOMXPath($DOM);
-			
-			
-				// Platz-Nummer
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[1]');
-				$i = 0;
-				foreach ($content as $entry01) {
-			   	$BundesligaTabelleAR["Platz"][] = $entry01->nodeValue;
-				   $i++;
-				}
-			
-				// Verein-Logo URL
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[2]/a/img/@src');
-				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["VereinLogo"][] = $entry01->nodeValue;
-				}
-			
-				// Verein-Name
-			   $content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[3]');
-			   foreach ($content as $entry01) {
-					//$BundesligaTabelleAR["VereinName"][] = strtr(utf8_decode($entry01->nodeValue), $Sonderzeichen);
-					$BundesligaTabelleAR["VereinName"][] = strtr(mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1'), $Sonderzeichen);
-				}
-			
-				// Anzahl Spiele
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[4]');
-				$i = 0;
-				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Spiele"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
-					$i++;
-				}
-			
-				// Anzahl Siege
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[5]');
-				$i = 0;
-				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Siege"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
-					$i++;
-				}
-			
-				// Anzahl Unentschieden
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[6]');
-				$i = 0;
-				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Unentschieden"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
-					$i++;
-				}
-			
-				// Anzahl Niederlagen
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[7]');
-				$i = 0;
-				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Niederlagen"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
-					$i++;
-				}
-			
-				// Torverhältnis
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[8]');
-				$i = 0;
-				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Torverhaeltnis"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
-					$i++;
-				}
-			
-				// Tor-Differenz
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[9]');
-				$i = 0;
-				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["TorDifferenz"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
-					$i++;
-				}
-			
-				// Punkte
-				$content = $xpath->query('.//*[@class="data-table table-bordered"]/tbody/tr/td[10]');
-				$i = 0;
-				foreach ($content as $entry01) {
-					$BundesligaTabelleAR["Punkte"][] = mb_convert_encoding($entry01->nodeValue, 'ISO-8859-1');
-					$i++;
-				}
-        
-
-        /*********** Ab hier beginnt die "Verarbeitung" der Daten aus dem Array **************/
-        
-				$TabelleMitFarben = $this->ReadPropertyBoolean("FarbenAktiv");   // true = Tabelle in HTMLBox mit Farben, false = Tabelle in HTMLBox ohne Farben
-				$LigaAuswahl = $this->ReadPropertyString("LigaSelection");
-			
-				// HTML CSS Style definieren (Tabelle, Schrift, Farben, ...)
-				if ($TabelleMitFarben == false) {
-				$HTML_CSS_Style = '';
-				}
-				else
-				{
-						if ($this->ReadPropertyString("TextFarbcode") == "FFFFFF")
-						{
-								$BackColor = "000000";
-						}
-						elseif ($this->ReadPropertyString("TextFarbcode") == "000000")
-						{
-							
-								$BackColor = "FFFFFF";
-						}
-						else
-						{
-							
-								$BackColor = "FFFFFF";
-						}
-						
-						$HTML_CSS_Style = '<style type="text/css">
-						.bt {border-collapse;border-spacing:0;}
-						.bt td'.$this->InstanceID.' {font-family:Arial, sans-serif;font-size:'.$this->ReadPropertyString("TextSize").'px;color:#FFFFFF;padding:1px 10px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;}
-						.bt th'.$this->InstanceID.' {font-family:Arial, sans-serif;font-size:'.$this->ReadPropertyString("TextSize").'px;color:#FFFFFF;font-weigth:normal;padding:1px 10px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;}
-						.bt .tb-title'.$this->InstanceID.'{font-size:'.$this->ReadPropertyString("TextSize").'px;background-color:#'.$BackColor.';color:#'.$this->ReadPropertyString("TextFarbcode").';text-align:center}
-						.bt .tb-cl'.$this->InstanceID.'{font-size:'.$this->ReadPropertyString("TextSize").'px;background-color:#32CB00;color:#'.$this->ReadPropertyString("TextFarbcode").';text-align:center}
-						.bt .tb-clqual'.$this->InstanceID.'{font-size:'.$this->ReadPropertyString("TextSize").'px;background-color:#009901;color:#'.$this->ReadPropertyString("TextFarbcode").';text-align:center}
-						.bt .tb-eurol'.$this->InstanceID.'{font-size:'.$this->ReadPropertyString("TextSize").'px;background-color:#3166FF;color:#'.$this->ReadPropertyString("TextFarbcode").';text-align:center}
-						.bt .tb-normal'.$this->InstanceID.'{font-size:'.$this->ReadPropertyString("TextSize").'px;background-color:#'.$BackColor.';color:#'.$this->ReadPropertyString("TextFarbcode").';text-align:center}
-						.bt .tb-abstgrel'.$this->InstanceID.'{font-size:'.$this->ReadPropertyString("TextSize").'px;background-color:#FD6864;color:#'.$this->ReadPropertyString("TextFarbcode").';text-align:center}
-						.bt .tb-abstg'.$this->InstanceID.'{font-size:'.$this->ReadPropertyString("TextSize").'px;background-color:#FE0000;color:#'.$this->ReadPropertyString("TextFarbcode").';text-align:center}
-						</style>';
-				}
-				
-				
-				// HTML Ausgabe generieren
-				$TitelAR = array("Platz","Verein","Spiele","S","U","N","TV","TDiff","Punkte");  // Hier könnt ihr die Überschriften der Spalten ändern
-				$HTML = '<html>'.$HTML_CSS_Style;
-				$HTML .= '<table class="bt">';
-				$HTML .= '<tr><th class="tb-title'.$this->InstanceID.'">'.$TitelAR[0].'</th><th class="tb-title'.$this->InstanceID.'" colspan="2">'.$TitelAR[1].'</th><th class="tb-title'.$this->InstanceID.'">'.$TitelAR[2].'</th><th class="tb-title'.$this->InstanceID.'">'.$TitelAR[3].'</th><th class="tb-title'.$this->InstanceID.'">'.$TitelAR[4].'</th><th class="tb-title'.$this->InstanceID.'">'.$TitelAR[5].'</th><th class="tb-title'.$this->InstanceID.'">'.$TitelAR[6].'</th><th class="tb-title'.$this->InstanceID.'">'.$TitelAR[7].'</th><th class="tb-title'.$this->InstanceID.'">'.$TitelAR[8].'</th></tr>';
-				
-				// Tabelle der 1. Liga generieren
-				if ($LigaAuswahl == "Liga1") {
-					for ($h=0; $h<count($BundesligaTabelleAR["Platz"]); $h++) {
-						if (($h == 0) OR ($h == 1) OR ($h == 2)) {
-						   $HTML .= '<tr><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-cl'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif ($h == 3) {
-						   $HTML .= '<tr><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif (($h == 4) OR ($h == 5)) {
-						   $HTML .= '<tr><th class="tb-eurol'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-eurol'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-eurol'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-eurol'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-eurol'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-eurol'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-eurol'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-eurol'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-eurol'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-eurol'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif (($h >= 6) AND ($h <= 14)) {
-						   $HTML .= '<tr><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-normal'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif ($h == 15) {
-						   $HTML .= '<tr><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif (($h == 16) OR ($h == 17)) {
-						   $HTML .= '<tr><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-					}
-				}
-				elseif ($LigaAuswahl == "Liga2") {  // Tabelle der 2. Liga generieren
-					for ($h=0; $h<count($BundesligaTabelleAR["Platz"]); $h++) {
-						if (($h == 0) OR ($h == 1)) {
-						   $HTML .= '<tr><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-cl'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif ($h == 2) {
-						   $HTML .= '<tr><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif (($h >= 3) AND ($h <= 14)) {
-						   $HTML .= '<tr><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-normal'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif ($h == 15) {
-						   $HTML .= '<tr><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-abstgrel'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif (($h == 16) OR ($h == 17)) {
-						   $HTML .= '<tr><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-					}
-				}
-				elseif ($LigaAuswahl == "Liga3") {  // Tabelle der 3. Liga generieren
-					for ($h=0; $h<count($BundesligaTabelleAR["Platz"]); $h++) {
-						if (($h == 0) OR ($h == 1)) {
-						   $HTML .= '<tr><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-cl'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-cl'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif ($h == 2) {
-						   $HTML .= '<tr><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-clqual'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif (($h >= 3) AND ($h <= 16)) {
-						   $HTML .= '<tr><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-normal'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-normal'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-						elseif (($h == 17) OR ($h == 18) OR ($h == 19)) {
-						   $HTML .= '<tr><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Platz"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'"><img height="25" width="25" src="'.$BundesligaTabelleAR["VereinLogo"][$h].'"></img></th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["VereinName"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Spiele"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Siege"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Unentschieden"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Niederlagen"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Torverhaeltnis"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["TorDifferenz"][$h].'</th><th class="tb-abstg'.$this->InstanceID.'">'.$BundesligaTabelleAR["Punkte"][$h].'</th></tr>';
-						}
-					}
-				}
-				$HTML .= '</table></html>';
-				
-				
-				//HTML-Tabelle in Variable schreiben
-				$this->SetValueString("HTMLBoxTabelle", $HTML);
-    }
-
-   
-    private function SetValueString($Ident, $Value)
-    {
-    		$id = $this->GetIDforIdent($Ident);
-    		if (GetValueString($id) <> $Value)
-    		{
-    				//SetValueString($id, $Value);
-					SetValueString($id, iconv(mb_detect_encoding($Value, mb_detect_order(), true), "UTF-8", $Value));
-    				return true;
-    		}
-    		return false;
-  	}
-
-    protected function RegisterTimer($Name, $Interval, $Script)
-    {
-        $id = @IPS_GetObjectIDByIdent($Name, $this->InstanceID);
-        if ($id === false)
-            $id = 0;
-
-
-        if ($id > 0)
-        {
-            if (!IPS_EventExists($id))
-                throw new Exception("Ident with name " . $Name . " is used for wrong object type", E_USER_WARNING);
-
-            if (IPS_GetEvent($id)['EventType'] <> 1)
-            {
-                IPS_DeleteEvent($id);
-                $id = 0;
+        try {
+            $league = $this->leagueConfig();
+            $table = $this->requestJson(self::API_BASE . '/getbltable/' . $league['shortcut'] . '/' . $this->seasonStartYear());
+            if (!is_array($table) || count($table) < 2) {
+                throw new RuntimeException('Der Tabellenanbieter hat keine verwertbare Tabelle geliefert.');
             }
-        }
-
-        if ($id == 0)
-        {
-            $id = IPS_CreateEvent(1);
-            IPS_SetParent($id, $this->InstanceID);
-            IPS_SetIdent($id, $Name);
-        }
-        IPS_SetName($id, $Name);
-        IPS_SetHidden($id, true);
-        IPS_SetEventScript($id, $Script);
-        if ($Interval > 0)
-        {
-            IPS_SetEventCyclic($id, 0, 0, 0, 0, 1, $Interval);
-
-            IPS_SetEventActive($id, true);
-        } else
-        {
-            IPS_SetEventCyclic($id, 0, 0, 0, 0, 1, 1);
-
-            IPS_SetEventActive($id, false);
-        }
-    }
-
-    protected function UnregisterTimer($Name)
-    {
-        $id = @IPS_GetObjectIDByIdent($Name, $this->InstanceID);
-        if ($id > 0)
-        {
-            if (!IPS_EventExists($id))
-                throw new Exception('Timer not present', E_USER_NOTICE);
-            IPS_DeleteEvent($id);
+            $rows = [];
+            foreach ($table as $entry) {
+                if (!is_array($entry) || empty($entry['teamName'])) continue;
+                $rows[] = [
+                    'rank' => count($rows) + 1,
+                    'team' => (string)$entry['teamName'],
+                    'shortName' => (string)($entry['shortName'] ?? $entry['teamName']),
+                    'logo' => (string)($entry['teamIconUrl'] ?? ''),
+                    'played' => (int)($entry['matches'] ?? 0),
+                    'won' => (int)($entry['won'] ?? 0),
+                    'draw' => (int)($entry['draw'] ?? 0),
+                    'lost' => (int)($entry['lost'] ?? 0),
+                    'goalsFor' => (int)($entry['goals'] ?? 0),
+                    'goalsAgainst' => (int)($entry['opponentGoals'] ?? 0),
+                    'goalDiff' => (int)($entry['goalDiff'] ?? 0),
+                    'points' => (int)($entry['points'] ?? 0)
+                ];
+            }
+            if (!$rows) throw new RuntimeException('Die Antwort enthielt keine Vereine.');
+            $news = $league['shortcut'] === 'bl1' ? $this->fetchBayernNews() : [];
+            $payload = ['league' => $league['name'], 'season' => $this->seasonLabel(), 'updatedAt' => date(DATE_ATOM), 'source' => 'OpenLigaDB', 'teams' => $rows];
+            $this->SetValue('StandingsJson', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+            $this->SetValue('BayernNewsJson', json_encode($news, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+            $this->SetValue('LastUpdate', date('d.m.Y H:i:s'));
+            $this->SetValue('LastError', '');
+            $this->SetValue('HTMLBoxTabelle', $this->render($payload, $news));
+        } catch (Throwable $e) {
+            $this->SetValue('LastError', $e->getMessage());
+            $this->SetValue('HTMLBoxTabelle', $this->errorPage($e->getMessage()));
+            IPS_LogMessage('BundesligaTabelle', 'Aktualisierung fehlgeschlagen: ' . $e->getMessage());
         }
     }
 
-    protected function SetTimerInterval($Name, $Interval)
+    private function leagueConfig()
     {
-        $id = @IPS_GetObjectIDByIdent($Name, $this->InstanceID);
-        if ($id === false)
-            throw new Exception('Timer not present', E_USER_WARNING);
-        if (!IPS_EventExists($id))
-            throw new Exception('Timer not present', E_USER_WARNING);
-
-        $Event = IPS_GetEvent($id);
-
-        if ($Interval < 1)
-        {
-            if ($Event['EventActive'])
-                IPS_SetEventActive($id, false);
+        switch ($this->ReadPropertyString('LigaSelection')) {
+            case 'Liga2': return ['shortcut' => 'bl2', 'name' => '2. Bundesliga'];
+            case 'Liga3': return ['shortcut' => 'bl3', 'name' => '3. Liga'];
+            default: return ['shortcut' => 'bl1', 'name' => 'Bundesliga'];
         }
-        else
-        {
-            if ($Event['CyclicTimeValue'] <> $Interval)
-                IPS_SetEventCyclic($id, 0, 0, 0, 0, 1, $Interval);
-            if (!$Event['EventActive'])
-                IPS_SetEventActive($id, true);
+    }
+
+    private function seasonStartYear()
+    {
+        $date = new DateTimeImmutable('now');
+        return (int)$date->format('n') >= 7 ? (int)$date->format('Y') : (int)$date->format('Y') - 1;
+    }
+
+    private function seasonLabel()
+    {
+        $year = $this->seasonStartYear();
+        return $year . '/' . substr((string)($year + 1), -2);
+    }
+
+    private function requestJson($url)
+    {
+        $context = stream_context_create(['http' => ['timeout' => 12, 'header' => "User-Agent: Symcon-BundesligaTabelle/2.0\r\nAccept: application/json\r\n"], 'https' => ['timeout' => 12, 'header' => "User-Agent: Symcon-BundesligaTabelle/2.0\r\nAccept: application/json\r\n"]]);
+        $body = @file_get_contents($url, false, $context);
+        if ($body === false || trim($body) === '') throw new RuntimeException('OpenLigaDB ist nicht erreichbar. Netzwerk/DNS prüfen.');
+        $data = json_decode($body, true);
+        if (json_last_error() !== JSON_ERROR_NONE) throw new RuntimeException('OpenLigaDB lieferte ungültige JSON-Daten.');
+        return $data;
+    }
+
+    private function fetchBayernNews()
+    {
+        $context = stream_context_create(['http' => ['timeout' => 8, 'header' => "User-Agent: Symcon-BundesligaTabelle/2.0\r\n"], 'https' => ['timeout' => 8, 'header' => "User-Agent: Symcon-BundesligaTabelle/2.0\r\n"]]);
+        $xml = @file_get_contents(self::BAYERN_RSS, false, $context);
+        if ($xml === false) return [];
+        $feed = @simplexml_load_string($xml);
+        if (!$feed || empty($feed->channel->item)) return [];
+        $items = [];
+        foreach ($feed->channel->item as $item) {
+            $title = trim((string)$item->title);
+            if ($title === '') continue;
+            $items[] = ['title' => $title, 'url' => trim((string)$item->link), 'date' => trim((string)$item->pubDate)];
+            if (count($items) >= 4) break;
         }
+        return $items;
+    }
+
+    private function render($payload, $news)
+    {
+        $escape = static function ($value) { return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); };
+        $teams = $payload['teams'];
+        $bayern = null;
+        foreach ($teams as $team) if (stripos($team['team'], 'Bayern') !== false) { $bayern = $team; break; }
+        $updated = date('d.m.Y H:i', strtotime($payload['updatedAt']));
+        $font = max(10, min(24, (int)$this->ReadPropertyString('TextSize')));
+        $html = '<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+        *{box-sizing:border-box}body{margin:0;padding:clamp(10px,2vw,24px);font:'.$font.'px/1.4 Arial,sans-serif;color:#f8f8fb;background:linear-gradient(145deg,#071b3b,#0b1120 48%,#17131a)}
+        .wrap{max-width:1400px;margin:auto}.hero{padding:20px 22px;margin-bottom:14px;border-radius:16px;background:linear-gradient(110deg,#c8102e,#8e1029 55%,#163b70);box-shadow:0 8px 28px #0006}
+        .eyebrow{font-size:.8em;letter-spacing:.13em;text-transform:uppercase;opacity:.85}.hero h1{margin:4px 0;font-size:clamp(22px,4vw,34px)}.sub{opacity:.85}
+        .table-card,.info-card{background:#101a2beF;border:1px solid #ffffff1c;border-radius:14px;overflow:hidden;box-shadow:0 5px 18px #0004}
+        .section-title{padding:14px 16px;margin:0;background:#ffffff08;font-size:1.15em}.scroll{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;min-width:700px}th,td{padding:9px 8px;text-align:center;border-bottom:1px solid #ffffff12;white-space:nowrap}
+        th{font-size:.85em;color:#b9c8de;background:#0d1523}td.club{text-align:left;font-weight:600}.rank{font-weight:700;width:52px}
+        tr.bayern{background:linear-gradient(90deg,#bd1734aa,#8e102933);box-shadow:inset 4px 0 #e31b3b}
+        tr:hover{background-color:#ffffff0c}.logo{width:24px;height:24px;object-fit:contain;vertical-align:middle;margin-right:8px}
+        .points{font-size:1.12em;font-weight:800;color:#fff}.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:14px}
+        .info-card{padding:16px}.info-card h2{margin:0 0 10px;font-size:1em;color:#f3b8c4}.stat{font-size:1.35em;font-weight:700}.muted{color:#aebbd0;font-size:.85em}.news{padding:8px 0;border-top:1px solid #ffffff15}
+        a{color:#ffd1d9;text-decoration:none}a:hover{text-decoration:underline}.foot{padding:12px 2px;color:#9daac0;font-size:.78em}
+        @media(max-width:600px){body{padding:8px}.hero{padding:16px}.section-title{padding:12px}}
+        </style><div class="wrap"><header class="hero"><div class="eyebrow">Bundesliga · '.$escape($payload['season']).'</div><h1>Die aktuelle Tabelle</h1><div class="sub">FC Bayern Look · Stand '.$escape($updated).' Uhr</div></header>
+        <section class="table-card"><h2 class="section-title">'.$escape($payload['league']).' – alle Teams</h2><div class="scroll"><table><thead><tr><th>Platz</th><th colspan="2">Verein</th><th>Sp.</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Diff.</th><th>Pkt.</th></tr></thead><tbody>';
+        foreach ($teams as $team) {
+            $isBayern = stripos($team['team'], 'Bayern') !== false;
+            $logo = filter_var($team['logo'], FILTER_VALIDATE_URL) ? '<img class="logo" loading="lazy" src="'.$escape($team['logo']).'" alt="">' : '';
+            $html .= '<tr'.($isBayern ? ' class="bayern"' : '').'><td class="rank">'.$escape($team['rank']).'</td><td>'.$logo.'</td><td class="club">'.$escape($team['team']).($isBayern ? ' ★' : '').'</td><td>'.$escape($team['played']).'</td><td>'.$escape($team['won']).'</td><td>'.$escape($team['draw']).'</td><td>'.$escape($team['lost']).'</td><td>'.$escape($team['goalsFor']).':'.$escape($team['goalsAgainst']).'</td><td>'.$escape(($team['goalDiff'] > 0 ? '+' : '').$team['goalDiff']).'</td><td class="points">'.$escape($team['points']).'</td></tr>';
+        }
+        $html .= '</tbody></table></div></section><section class="info-grid"><article class="info-card"><h2>Bundesliga im Überblick</h2><div class="stat">'.$escape(count($teams)).' Mannschaften</div><div class="muted">Tabelle und Spielwerte der Saison '.$escape($payload['season']).'.</div></article>';
+        if ($bayern) $html .= '<article class="info-card"><h2>FC Bayern München</h2><div class="stat">Platz '.$escape($bayern['rank']).' · '.$escape($bayern['points']).' Punkte</div><div>'.$escape($bayern['played']).' Spiele · '.$escape($bayern['won']).' Siege, '.$escape($bayern['draw']).' Remis, '.$escape($bayern['lost']).' Niederlagen</div><div class="muted">Torverhältnis '.$escape($bayern['goalsFor']).':'.$escape($bayern['goalsAgainst']).' ('.$escape(($bayern['goalDiff'] > 0 ? '+' : '').$bayern['goalDiff']).')</div></article>';
+        $html .= '<article class="info-card"><h2>Neuigkeiten vom FC Bayern</h2>';
+        if ($news) foreach ($news as $item) $html .= '<div class="news"><a href="'.$escape($item['url']).'" target="_blank" rel="noopener">'.$escape($item['title']).'</a><div class="muted">'.$escape($item['date']).'</div></div>';
+        else $html .= '<div class="muted">Der Nachrichtenfeed ist gerade nicht erreichbar.</div>';
+        $html .= '</article></section><div class="foot">Tabelle: OpenLigaDB · Vereinsmeldungen: FC Bayern München · Aktualisierung automatisch</div></div></html>';
+        return $html;
+    }
+
+    private function errorPage($message)
+    {
+        return '<!doctype html><html lang="de"><meta charset="utf-8"><style>body{font:16px Arial;background:#101a2b;color:#fff;padding:24px}h1{color:#e31b3b}</style><h1>Bundesliga-Tabelle</h1><p>Aktualisierung fehlgeschlagen.</p><p>'.htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</p><p>Die letzte erfolgreiche Tabelle bleibt in den JSON-Daten erhalten.</p></html>';
     }
 }
 ?>
