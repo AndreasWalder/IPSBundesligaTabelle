@@ -1,14 +1,13 @@
 {
-    "id": "{E4E41370-F6BC-4896-A281-5836F893F7D2}",
-    "name": "BundesligaTabelle",
-    "type": 3,
-    "vendor": "",
-    "aliases": 
-    [
-        "BundesligaTabelle"
-    ],
-    "parentRequirements": [],
-    "childRequirements": [],
-    "implemented": [],
-    "prefix": "BLT"
+  "id": "{E4E41370-F6BC-4896-A281-5836F893F7D2}",
+  "name": "BundesligaTabelle",
+  "type": 3,
+  "vendor": "Andreas Walder",
+  "aliases": [
+    "BundesligaTabelle"
+  ],
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": [],
+  "prefix": "BLT"
 }
